@@ -345,10 +345,38 @@
                   tmpTree.slot = "children"
                   
                   let treeGrandChild = document.createElement("calcite-tree-item");
-                  treeGrandChild.innerHTML = item.title;
+                  let newTitle  = item.title.substring(0,25)
+                  const title = document.createElement("span");
+                  title.style = "overflow: hidden; white-space: nowrap; text-overflow: ellipsis;max-width: 25ch;";
+                  
+                  if (item.title.length > 25){
+                    newTitle = newTitle + '...'
+                  }
+                  title.innerHTML = item.title;
+                  
                   treeGrandChild.setAttribute('value', item.itemPageUrl);
-                  //treeGrandChild.setAttribute('icon-start','app-gear') //we can do icons and stuff here. 
                   treeGrandChild.setAttribute('expanded',true)
+                  treeGrandChild.appendChild(title)
+                  
+                  let action1 = document.createElement("calcite-action")
+                  action1.setAttribute('id','action-with-tooltip')
+                  action1.setAttribute('text','layers')
+                  action1.setAttribute('icon','launch')
+                  action1.setAttribute('slot','actions-end')
+                  action1.setAttribute('appearance','transparent')
+                  
+                  let action2 = document.createElement("calcite-action")
+                  action2.setAttribute('id','action-with-tooltip')
+                  action2.setAttribute('text','layers')
+                  action2.setAttribute('icon','information')
+                  action2.setAttribute('slot','actions-end')
+                  action2.setAttribute('appearance','transparent')
+
+                  treeGrandChild.appendChild(action2);
+                  treeGrandChild.appendChild(action1);
+        // <calcite-tooltip reference-element="action-with-tooltip">
+        //     <span>More information about layers</span>
+        // </calcite-tooltip>
 
                   tmpTree.appendChild(treeGrandChild)
                   //Append to category tree parent item.
