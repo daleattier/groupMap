@@ -1,0 +1,394 @@
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no" />
+    <title>Group Map</title>
+
+    <script type="module" src="https://js.arcgis.com/calcite-components/2.8.5/calcite.esm.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://js.arcgis.com/calcite-components/2.8.5/calcite.css" />
+    <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.30/"></script>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0px;
+        padding: 0px;
+      }
+
+      calcite-card {
+        border: 2px solid gray;
+        border-radius: 5px;
+        height: 300px;
+        width: 250px;
+      }
+    </style>
+    <script>
+      require([
+
+        "esri/portal/Portal",
+        "esri/identity/OAuthInfo",
+        "esri/identity/IdentityManager",
+        "esri/portal/PortalQueryParams",
+        "esri/portal/PortalGroup"
+
+      ], (Portal, OAuthInfo, esriId, PortalQueryParams, PortalGroup) => {
+        // UI elements
+        const signInButton = document.getElementById("sign-in-button");
+        const navLogo = document.getElementById("nav-logo");
+        const navigationUser = document.getElementById("nav-user");
+        const galleryPanel = document.getElementById("item-panel");
+        const itemGallery = document.getElementById("item-gallery");
+        const menuTree = document.getElementById("menu-tree");
+        signInButton.addEventListener("click", signInOrOut);
+        navigationUser.addEventListener("click", signInOrOut);
+
+
+        //Create a new OAuthInfo object.
+        const info = new OAuthInfo({
+          // Swap this ID out with an app ID registered in your ArcGIS Organization.
+          appId: "1BKAoYONUklGdSeS"
+          // Add the portalUrl property if using your own portal.
+          // portalUrl: "https://<host>:<port>/<webadaptor>",
+          // Set the authNamespace property to prevent the user's signed in state
+          // from being shared with other apps on the same domain with the same authNamespace value.
+          // authNamespace: "portal_oauth_inline",
+          // Set popup to true to show the OAuth sign-in page in a separate popup window.
+          //popup: true
+        });
+
+        // Add the OAuthInfo to the IdentityManager.
+        esriId.registerOAuthInfos([info]);
+
+
+
+        // Call the checkSignIn function to see if the user is already signed in.
+        checkSignIn();
+
+        // Function to check the current sign in status and query the portal if signed in.
+        function checkSignIn() {
+          esriId
+            .checkSignInStatus(info.portalUrl + "/sharing")
+            .then(() => {
+              // If signed in, show the username in the UI.
+              navigationUser.hidden = false;
+              signInButton.hidden = true;
+              const portal = new Portal({
+                authMode: "immediate"
+              });
+              // Check if using a portal other than ArcGIS Online.
+              if (info.portalUrl !== "https://anglogoldashanti.maps.arcgis.com/") {
+                portal.url = info.portalUrl;
+              }
+              // Load the portal, display the name and username, then call the query items function.
+              portal.load().then(() => {
+                navigationUser.fullName = portal.user.fullName;
+                navigationUser.username = portal.user.username;
+                navLogo.description =
+                  "Gallery of selected items displayed below. To sign out, click on the logged in user button.";
+                queryItems(portal);
+                queryGroup(portal);
+              });
+            })
+            .catch(() => {
+              // If not signed in, then show the sign in button.
+              signInButton.hidden = false;
+              navigationUser.hidden = true;
+              navLogo.description = "Use OAuth to log in to an ArcGIS Organization to view your items.";
+            });
+        }
+
+
+
+        // Function to sign in or out of the portal used by the sign in/out button click event.
+        function signInOrOut() {
+          esriId
+            .checkSignInStatus(info.portalUrl + "/sharing")
+            .then(() => {
+              // If already signed in, then destroy the credentials to sign out.
+              esriId.destroyCredentials();
+              window.location.reload();
+            })
+            .catch(() => {
+              // If the user is not signed in, generate a new credential.
+              esriId
+                .getCredential(info.portalUrl + "/sharing", {
+                  // Set the following property to false to not show a dialog
+                  // before the OAuth popup window is open.
+                  //oAuthPopupConfirmation: false,
+                })
+                .then(() => {
+                  // Once a credential is returned from the promise, check the
+                  // sign in status to query the portal for items.
+                  checkSignIn();
+                });
+            });
+        }
+
+        // Function to query group.
+        function queryGroup(portal) {
+            const queryParams = new PortalQueryParams({
+            filter: "id:cc1c133718d54fa98d27d2767bf5f228" ,
+            sortField: "num-views",
+            sortOrder: "desc",
+            num: 20
+          });
+            // Queries the group and then runs viewGroup function.
+            portal.queryGroups(queryParams).then(viewGroup);
+            //console.log('Group')
+           
+          }
+
+        // Function to query for group items.
+        function queryItems(portal) {
+          // Create query parameters for the portal search.
+          const queryParams = new PortalQueryParams({
+            //query: "owner:" + portal.user.username,
+            sortField: "num-views",
+            sortOrder: "asc",
+            num: 20
+          });
+          // Query the items based on the queryParams created from the portal.
+          //portal.queryItems(queryParams).then(createGallery);
+        }
+
+        async function viewGroup(items){
+          const queryParams = new PortalQueryParams({
+            query: '(type:("Feature Collection" OR "Feature Service" OR "Stream Service" OR "WFS" OR "Feed" OR "OGCFeatureServer")) AND group:cc1c133718d54fa98d27d2767bf5f228 ',
+            sortField: "title",
+            sortOrder: "asc",
+            num: 100,
+            start: 0
+            
+          });
+            //Gets just the first set of results.
+            myGroup = items.results[0]
+            let results = await getAllWithGroups(myGroup);
+
+            //Creates the tree structure from the schema.
+            await myGroup.fetchCategorySchema().then(function(schemas){
+                    schemas.forEach(function(schema){
+                      createTree(schema, results);
+                    })
+                });
+            //Creates the gallery from all the group items. 
+
+            
+            createGallery(results)
+            populateTree(results);
+            //myGroup.queryItems(queryParams).then(createGallery);
+            //myGroup.queryItems(queryParams).then(populateTree);
+            //Creates the items underneath each category.
+            // myGroup.queryItems(queryParams).then(function(items){
+            //         console.log(items)
+            //         items.results.forEach(function(item){
+            //             populateTree(item);
+            //         })
+                   
+            //     });
+        }
+
+        async function getAllWithGroups(group){
+          const queryParams = new PortalQueryParams({
+            query: '(type:("Feature Collection" OR "Feature Service" OR "Stream Service" OR "WFS" OR "Feed" OR "OGCFeatureServer")) AND group:cc1c133718d54fa98d27d2767bf5f228 ',
+            sortField: "title",
+            sortOrder: "asc",
+            num: 100,
+            start: 0
+          });
+          let data = await group.queryItems(queryParams);
+          results = data.results;
+          let numItems = data.total
+          for(let n=1; n < parseInt(numItems / 100) + 1; n++ )
+            {
+              queryParams.start = n * 100
+              let data = await group.queryItems(queryParams);
+              results.push(...data.results)
+            }
+          return results
+        }
+
+        // Function to build the UI for the gallery to display queried portal items.
+        function createGallery(items) {
+          //console.log(items);
+          items.forEach((item) => {
+            if (item.groupCategories.length > 0)
+                { 
+              // Create a card for each item and add a thumbnail, title, subtitle,
+              // view count value, and a button to open the item in a new window.
+              const card = document.createElement("calcite-card");
+              const thumbnail = document.createElement("img");
+              thumbnail.slot = "thumbnail";
+              thumbnail.src = item.thumbnailUrl;
+
+              const title = document.createElement("span");
+              title.slot = "title";
+              title.style = "overflow: hidden; white-space: nowrap; text-overflow: ellipsis;";
+              title.innerHTML = item.title;
+
+              const type = document.createElement("span");
+              type.slot = "subtitle";
+              type.innerHTML = item.type;
+              //console.log(item);
+              item.groupCategories.forEach((cat) => {
+                  type.innerHTML = type.innerHTML + "<br/> Category: " + cat.replace('/Categories','').replace('/','');    
+              })
+              
+
+              const views = document.createElement("span");
+              views.slot = "footer-end";
+              views.innerHTML = "Views: " + item.numViews;
+
+              const openItemAction = document.createElement("calcite-action");
+              openItemAction.icon = "launch";
+              openItemAction.slot = "footer-end";
+              openItemAction.value = item;
+              // Add event listener to open the item details page in a new window.
+              openItemAction.addEventListener("click", (event) => {
+                window.open(event.target.value.itemPageUrl);
+              });
+
+              card.appendChild(thumbnail);
+              card.appendChild(title);
+              card.appendChild(type);
+              card.appendChild(views);
+              card.appendChild(openItemAction);
+
+              // Add each card to a new div with styling and add to the calcite panel.
+              const div = document.createElement("item");
+              div.style = "float: left; padding: 10px; display: inline-block;";
+              div.appendChild(card);
+              itemGallery.appendChild(div);
+              }
+          });
+        }
+        // function createTreeOld(){
+        //     let cat1 =  document.createElement("calcite-tree");
+        //     cat1.slot = "children"
+        //     let cat2 =  document.createElement("calcite-tree");
+        //     cat2.slot = "children"
+
+        //     let treeGrandChild = document.createElement("calcite-tree-item");
+        //     treeGrandChild.innerHTML = 'Child';
+        //     treeGrandChild.setAttribute('value','myTestVal');
+        //     treeGrandChild.setAttribute('icon-start','3d-glasses')
+        //     treeGrandChild.setAttribute('expanded',true)
+
+        //     let treeGrandChild2 = document.createElement("calcite-tree-item");
+        //     treeGrandChild2.innerHTML = 'Child2';
+        //     treeGrandChild2.setAttribute('value','myTestVal');
+        //     treeGrandChild2.setAttribute('icon-start','app-gear')
+        //     treeGrandChild2.setAttribute('expanded',true)
+            
+        //     cat1.appendChild(treeGrandChild)
+        //     cat2.appendChild(treeGrandChild2)
+
+        //     let treeChild = document.createElement("calcite-tree-item");
+        //     treeChild.innerHTML = 'Category 1';
+        //     treeChild.setAttribute('icon-start','360-view');
+        //     treeChild.appendChild(cat1);
+            
+        //     let treeChild2 = document.createElement("calcite-tree-item");
+        //     treeChild2.innerHTML = 'Category 2';
+        //     treeChild2.setAttribute('icon-start','add-reaction');
+        //     treeChild2.appendChild(cat2);
+            
+        //     menuTree.appendChild(treeChild);
+        //     menuTree.appendChild(treeChild2);
+            
+        // }
+      function createTree(schemas, results){
+            //Should only do the first one
+            console.log(results)
+            var counts = {};
+            var grpCats = [];
+            for (var i=0; i < results.length; i++){
+            grpCats.push(results[i].groupCategories[0]);
+            }
+            for (var i = 0; i < grpCats.length; i++) {
+                counts[grpCats[i]] = 1 + (counts[grpCats[i]] || 0);
+            }
+            delete counts['undefined']
+            for (const [key, value] of Object.entries(counts)) {
+                  let oldkey = key
+                  let newkey = key.replace('/Categories/','')
+                  counts[newkey] = counts[oldkey]
+                  delete counts[oldkey]
+                }
+            console.log(counts)
+            schemas.categories.forEach((cat)=>{
+                //For each category creates a tree item.    
+                catCount = 0 
+                if (cat.title in counts){
+                  catCount = catCount + counts[cat.title]
+                }
+                let treeChild = document.createElement("calcite-tree-item");
+                treeChild.innerHTML = cat.title + ' (' + catCount + ')';
+                treeChild.setAttribute('id',cat.title)
+                //treeChild.setAttribute('icon-start','360-view'); //We could create icons here
+                
+                menuTree.appendChild(treeChild);
+           })
+      }
+      function populateTree(items){
+          //console.log(items)
+          items.forEach((item) => {
+            item.groupCategories.forEach((cat) => {
+              let newCat = cat.replace('/Categories/','')
+              newCat = newCat.replace('/','')
+              
+              if(!newCat=='')  {
+                  //Need to create a new root with slot for child.
+                  const catTree = document.getElementById(newCat);
+                  let tmpTree =  document.createElement("calcite-tree");
+                  tmpTree.slot = "children"
+                  
+                  let treeGrandChild = document.createElement("calcite-tree-item");
+                  treeGrandChild.innerHTML = item.title;
+                  treeGrandChild.setAttribute('value', item.itemPageUrl);
+                  //treeGrandChild.setAttribute('icon-start','app-gear') //we can do icons and stuff here. 
+                  treeGrandChild.setAttribute('expanded',true)
+
+                  tmpTree.appendChild(treeGrandChild)
+                  //Append to category tree parent item.
+                  catTree.appendChild(tmpTree);
+                  
+              } 
+              })
+            //const catTree = document.getElementById("menu-tree");
+        
+          })
+        }  
+      });
+    </script>
+  </head>
+
+  <body>
+    <calcite-shell>
+      <calcite-navigation slot="header">
+        <calcite-navigation-logo
+          id="nav-logo"
+          slot="logo"
+          heading="Group map"
+          description="Creates a map from all the selected layers"
+        ></calcite-navigation-logo>
+        <calcite-button id="sign-in-button" slot="user">Sign in</calcite-button>
+        <calcite-navigation-user hidden id="nav-user" slot="user"> </calcite-navigation-user>
+      </calcite-navigation>
+      <calcite-shell-panel slot="panel-start" width-scale="m">
+        <calcite-panel heading="Table of Contents">
+            <calcite-tree id="menu-tree" scale="l" selection-mode="ancestors">
+            </calcite-tree>
+        </calcite-panel>
+
+      </calcite-shell-panel>
+      <calcite-panel id="item-panel">
+        
+        <div id="item-gallery"></div>
+      </calcite-panel>
+      
+    </calcite-shell>
+  </body>
+</html>
+
