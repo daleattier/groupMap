@@ -23,6 +23,12 @@
         height: 300px;
         width: 250px;
       }
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
     </style>
     <script>
       require([
@@ -31,9 +37,11 @@
         "esri/identity/OAuthInfo",
         "esri/identity/IdentityManager",
         "esri/portal/PortalQueryParams",
-        "esri/portal/PortalGroup"
+        "esri/portal/PortalGroup",
+        "esri/Map", 
+        "esri/views/MapView"
 
-      ], (Portal, OAuthInfo, esriId, PortalQueryParams, PortalGroup) => {
+      ], (Portal, OAuthInfo, esriId, PortalQueryParams, PortalGroup,Map, MapView) => {
         // UI elements
         const signInButton = document.getElementById("sign-in-button");
         const navLogo = document.getElementById("nav-logo");
@@ -43,7 +51,15 @@
         const menuTree = document.getElementById("menu-tree");
         signInButton.addEventListener("click", signInOrOut);
         navigationUser.addEventListener("click", signInOrOut);
-
+        const map = new Map({
+          basemap: "topo-vector"
+        });
+        const view = new MapView({
+          container: "viewDiv", // Reference to the view div created in step 5
+          map: map, // Reference to the map object created before the view
+          zoom: 3, // Sets zoom level based on level of detail (LOD)
+          center: [0, 0] // Sets center point of view using longitude,latitude
+        });
 
         //Create a new OAuthInfo object.
         const info = new OAuthInfo({
@@ -175,18 +191,9 @@
             //Creates the gallery from all the group items. 
 
             
-            createGallery(results)
+            //createGallery(results)
             populateTree(results);
-            //myGroup.queryItems(queryParams).then(createGallery);
-            //myGroup.queryItems(queryParams).then(populateTree);
-            //Creates the items underneath each category.
-            // myGroup.queryItems(queryParams).then(function(items){
-            //         console.log(items)
-            //         items.results.forEach(function(item){
-            //             populateTree(item);
-            //         })
-                   
-            //     });
+
         }
 
         async function getAllWithGroups(group){
@@ -263,44 +270,10 @@
               }
           });
         }
-        // function createTreeOld(){
-        //     let cat1 =  document.createElement("calcite-tree");
-        //     cat1.slot = "children"
-        //     let cat2 =  document.createElement("calcite-tree");
-        //     cat2.slot = "children"
 
-        //     let treeGrandChild = document.createElement("calcite-tree-item");
-        //     treeGrandChild.innerHTML = 'Child';
-        //     treeGrandChild.setAttribute('value','myTestVal');
-        //     treeGrandChild.setAttribute('icon-start','3d-glasses')
-        //     treeGrandChild.setAttribute('expanded',true)
-
-        //     let treeGrandChild2 = document.createElement("calcite-tree-item");
-        //     treeGrandChild2.innerHTML = 'Child2';
-        //     treeGrandChild2.setAttribute('value','myTestVal');
-        //     treeGrandChild2.setAttribute('icon-start','app-gear')
-        //     treeGrandChild2.setAttribute('expanded',true)
-            
-        //     cat1.appendChild(treeGrandChild)
-        //     cat2.appendChild(treeGrandChild2)
-
-        //     let treeChild = document.createElement("calcite-tree-item");
-        //     treeChild.innerHTML = 'Category 1';
-        //     treeChild.setAttribute('icon-start','360-view');
-        //     treeChild.appendChild(cat1);
-            
-        //     let treeChild2 = document.createElement("calcite-tree-item");
-        //     treeChild2.innerHTML = 'Category 2';
-        //     treeChild2.setAttribute('icon-start','add-reaction');
-        //     treeChild2.appendChild(cat2);
-            
-        //     menuTree.appendChild(treeChild);
-        //     menuTree.appendChild(treeChild2);
-            
-        // }
       function createTree(schemas, results){
             //Should only do the first one
-            console.log(results)
+            //console.log(results)
             var counts = {};
             var grpCats = [];
             for (var i=0; i < results.length; i++){
@@ -331,29 +304,45 @@
                 menuTree.appendChild(treeChild);
            })
       }
+      function onTreeSelect(item){
+          //console.log(item)
+          //newItem = item.srcElement
+          //console.log(newItem.attributes.value)
+      }
+
       function populateTree(items){
           //console.log(items)
           items.forEach((item) => {
             item.groupCategories.forEach((cat) => {
               let newCat = cat.replace('/Categories/','')
               newCat = newCat.replace('/','')
-              
+              var tmpTree 
+
               if(!newCat=='')  {
                   //Need to create a new root with slot for child.
+                  //console.log(document.getElementById(newCat+ '_tree'))
+                  if (document.getElementById(newCat+ '_tree') == null) {
+                      console.log("New " + newCat )
+                      tmpTree =  document.createElement("calcite-tree");
+                      tmpTree.setAttribute('id', newCat + '_tree')
+                      
+                      tmpTree.slot = "children"
+                  } else {
+                    tmpTree =  document.getElementById(newCat+ '_tree');
+                  }
                   const catTree = document.getElementById(newCat);
-                  let tmpTree =  document.createElement("calcite-tree");
-                  tmpTree.slot = "children"
+                  //console.log(tmpTree)
                   
                   let treeGrandChild = document.createElement("calcite-tree-item");
                   let newTitle  = item.title.substring(0,25)
                   const title = document.createElement("span");
                   title.style = "overflow: hidden; white-space: nowrap; text-overflow: ellipsis;max-width: 25ch;";
-                  
+
                   if (item.title.length > 25){
                     newTitle = newTitle + '...'
                   }
                   title.innerHTML = item.title;
-                  
+                  treeGrandChild.addEventListener("click",onTreeSelect(item))
                   treeGrandChild.setAttribute('value', item.itemPageUrl);
                   treeGrandChild.setAttribute('expanded',true)
                   treeGrandChild.appendChild(title)
@@ -387,7 +376,10 @@
             //const catTree = document.getElementById("menu-tree");
         
           })
-        }  
+        } 
+        function createMap(){
+          
+        } 
       });
     </script>
   </head>
@@ -413,7 +405,7 @@
       </calcite-shell-panel>
       <calcite-panel id="item-panel">
         
-        <div id="item-gallery"></div>
+        <div id="viewDiv"></div>
       </calcite-panel>
       
     </calcite-shell>
