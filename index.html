@@ -39,9 +39,10 @@
         "esri/portal/PortalQueryParams",
         "esri/portal/PortalGroup",
         "esri/Map", 
-        "esri/views/MapView"
+        "esri/views/MapView",
+        "esri/layers/FeatureLayer"
 
-      ], (Portal, OAuthInfo, esriId, PortalQueryParams, PortalGroup,Map, MapView) => {
+      ], (Portal, OAuthInfo, esriId, PortalQueryParams, PortalGroup,Map, MapView,FeatureLayer) => {
         // UI elements
         const signInButton = document.getElementById("sign-in-button");
         const navLogo = document.getElementById("nav-logo");
@@ -49,6 +50,7 @@
         const galleryPanel = document.getElementById("item-panel");
         const itemGallery = document.getElementById("item-gallery");
         const menuTree = document.getElementById("menu-tree");
+        const menuList = document.getElementById("menu-list");
         signInButton.addEventListener("click", signInOrOut);
         navigationUser.addEventListener("click", signInOrOut);
         const map = new Map({
@@ -185,14 +187,15 @@
             //Creates the tree structure from the schema.
             await myGroup.fetchCategorySchema().then(function(schemas){
                     schemas.forEach(function(schema){
-                      createTree(schema, results);
+                      //createTree(schema, results);
+                      createListGroups(schema, results);
                     })
                 });
             //Creates the gallery from all the group items. 
 
             
             //createGallery(results)
-            populateTree(results);
+            createList(results);
 
         }
 
@@ -270,7 +273,85 @@
               }
           });
         }
-
+      
+      function createListGroups(schemas, results){
+        var counts = {};
+            var grpCats = [];
+            for (var i=0; i < results.length; i++){
+            grpCats.push(results[i].groupCategories[0]);
+            }
+            for (var i = 0; i < grpCats.length; i++) {
+                counts[grpCats[i]] = 1 + (counts[grpCats[i]] || 0);
+            }
+            delete counts['undefined']
+            for (const [key, value] of Object.entries(counts)) {
+                  let oldkey = key
+                  let newkey = key.replace('/Categories/','')
+                  counts[newkey] = counts[oldkey]
+                  delete counts[oldkey]
+                }
+            //console.log(counts)
+            schemas.categories.forEach((cat)=>{
+                //For each category creates a tree item.    
+                catCount = 0 
+                if (cat.title in counts){
+                  catCount = catCount + counts[cat.title]
+                }
+                let listChild = document.createElement("calcite-list-item");
+                listChild.setAttribute('label', cat.title + ' (' + catCount + ')');
+                listChild.setAttribute('id',cat.title)
+                listChild.setAttribute('open',false)
+                //treeChild.setAttribute('icon-start','360-view'); //We could create icons here
+                
+                menuList.appendChild(listChild);
+           })
+      }
+      function createList(items){
+        items.forEach((item) => {
+            item.groupCategories.forEach((cat) => {
+              let newCat = cat.replace('/Categories/','')
+              newCat = newCat.replace('/','')
+              var tmpList 
+              //Grab the existing sublist if it exists if not create it.
+              if(!newCat=='')  {
+                if (document.getElementById(newCat+ '_list') == null) {
+                      console.log("New " + newCat )
+                      tmpList =  document.createElement("calcite-list");
+                      tmpList.setAttribute('id', newCat + '_list')
+                      tmpList.setAttribute('group', newCat)
+                      tmpList.setAttribute('selection-mode', 'multiple')
+                      
+                  } else {
+                    tmpList =  document.getElementById(newCat+ '_list');
+                  }
+                  const catList = document.getElementById(newCat);
+                  
+                  let childList = document.createElement("calcite-list-item");
+                  let newTitle  = item.title.substring(0,25)
+                  childList.setAttribute('label',item.title)
+                  childList.setAttribute('value', item.url);
+                  childList.setAttribute('extent', item.extent);
+                  console.log(item)
+                  let action1 = document.createElement("calcite-action")
+                  action1.setAttribute('id','action-with-tooltip')
+                  action1.setAttribute('text','layers')
+                  action1.setAttribute('icon','launch')
+                  action1.setAttribute('slot','actions-end')
+                  action1.setAttribute('appearance','transparent')
+                  
+                  childList.appendChild(action1)
+                  childList.addEventListener("calciteListItemSelect",onTreeSelect)
+                  //Append to sublist
+                  tmpList.appendChild(childList)
+                  //Append to group name list item.
+                  catList.appendChild(tmpList);
+                  
+              } 
+              })
+          })
+          document.querySelector("calcite-shell").hidden = false;
+        document.querySelector("calcite-loader").hidden = true;
+      }
       function createTree(schemas, results){
             //Should only do the first one
             //console.log(results)
@@ -305,9 +386,29 @@
            })
       }
       function onTreeSelect(item){
-          //console.log(item)
+          console.log(item)
+          newItem = item.target
+          itemValue = newItem.attributes.value.value
           //newItem = item.srcElement
-          //console.log(newItem.attributes.value)
+          console.log(itemValue)
+          const featureLayer = new FeatureLayer({
+            url: itemValue,
+            title: newItem.textContent
+            
+          });
+          // if (typeof(newItem.attributes.selected) == 'undefined') {
+          //   console.log('Adding')
+          //   map.add(featureLayer);
+          // } else {
+          //   console.log('Removing')
+          //   console.log(map)
+          //   map.remove(featureLayer);
+          // }
+
+          map.add(featureLayer);
+         // console.log(featureLayer)
+         // console.log(newItem.attributes)
+         // console.log(newItem.attributes.selected)
       }
 
       function populateTree(items){
@@ -320,7 +421,7 @@
 
               if(!newCat=='')  {
                   //Need to create a new root with slot for child.
-                  //console.log(document.getElementById(newCat+ '_tree'))
+
                   if (document.getElementById(newCat+ '_tree') == null) {
                       console.log("New " + newCat )
                       tmpTree =  document.createElement("calcite-tree");
@@ -331,7 +432,7 @@
                     tmpTree =  document.getElementById(newCat+ '_tree');
                   }
                   const catTree = document.getElementById(newCat);
-                  //console.log(tmpTree)
+
                   
                   let treeGrandChild = document.createElement("calcite-tree-item");
                   let newTitle  = item.title.substring(0,25)
@@ -342,10 +443,11 @@
                     newTitle = newTitle + '...'
                   }
                   title.innerHTML = item.title;
-                  treeGrandChild.addEventListener("click",onTreeSelect(item))
-                  treeGrandChild.setAttribute('value', item.itemPageUrl);
+                  //console.log(item)
+                  treeGrandChild.setAttribute('value', item.url);
                   treeGrandChild.setAttribute('expanded',true)
                   treeGrandChild.appendChild(title)
+                  treeGrandChild.addEventListener("click",onTreeSelect)
                   
                   let action1 = document.createElement("calcite-action")
                   action1.setAttribute('id','action-with-tooltip')
@@ -380,12 +482,15 @@
         function createMap(){
           
         } 
+        
       });
+      
     </script>
   </head>
 
   <body>
-    <calcite-shell>
+    <calcite-loader></calcite-loader>
+    <calcite-shell content-behind hidden>
       <calcite-navigation slot="header">
         <calcite-navigation-logo
           id="nav-logo"
@@ -396,10 +501,14 @@
         <calcite-button id="sign-in-button" slot="user">Sign in</calcite-button>
         <calcite-navigation-user hidden id="nav-user" slot="user"> </calcite-navigation-user>
       </calcite-navigation>
-      <calcite-shell-panel slot="panel-start" width-scale="m">
+      <calcite-shell-panel slot="panel-start" width-scale="l">
         <calcite-panel heading="Table of Contents">
-            <calcite-tree id="menu-tree" scale="l" selection-mode="ancestors">
-            </calcite-tree>
+            <!-- <calcite-tree id="menu-tree" scale="l" selection-mode="ancestors">
+            </calcite-tree> -->
+
+            <calcite-list id="menu-list" selection-mode="multiple" filter-enabled>
+
+            </calcite-list>
         </calcite-panel>
 
       </calcite-shell-panel>
